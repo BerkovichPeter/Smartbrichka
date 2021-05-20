@@ -1,0 +1,177 @@
+#include "Ultrasonic.h"
+#include "Wire.h"                
+#include "I2Cdev.h"
+#include "MPU6050.h"
+#include <SoftwareSerial.h>
+ 
+ 
+MPU6050 accelgyro;  
+int16_t ax, ay, az;  // define accel as ax,ay,az
+int16_t gx, gy, gz;  // define gyro as gx,gy,gz
+ 
+ 
+SoftwareSerial mySerial(3, 5); //RX TX
+ 
+unsigned tmpSpeedLev = 100;
+unsigned tmpSpeedPrav = 100;
+ 
+int16_t gyro_z = 0;
+ 
+char incomingByte = 's';
+ 
+int gyro_z_rate = 0;
+// Trig - 12, Echo - 13
+Ultrasonic ultrasonic(12, 13);
+ 
+unsigned int i = 2;
+ 
+unsigned int Speed_Lev = 0,
+Speed_Prav = 0,
+a;
+ 
+unsigned int interval = 40,
+previous_time = 0,
+current_time = 0,
+interval2 = 70,
+previous_time2 = 0,
+count_Lev = 0,
+count_Prav = 0;
+ 
+boolean A = true; boolean B = true;
+ 
+boolean Prav_Udardo;
+boolean Lev_Udardo;
+ 
+ 
+#define in1 8
+#define in2 7
+#define in3 4
+#define in4 2
+#define enB 10
+#define enA 11
+ 
+ 
+ 
+void movement(boolean A, boolean B, unsigned int Speed_Lev, unsigned int Speed_Prav) {
+    digitalWrite(in1, A);
+    digitalWrite(in2, !A);
+    analogWrite(enA, Speed_Lev);
+ 
+    digitalWrite(in3, !B);
+    digitalWrite(in4, B);
+    analogWrite(enB, Speed_Prav);
+}
+ 
+ 
+ 
+ 
+void setup() {
+ 
+    Wire.begin();
+    delay(100);
+    Serial.begin(9600);
+    delay(1000);
+    mySerial.begin(9600);
+    delay(1000);
+    accelgyro.initialize();  
+ 
+    pinMode(in1, OUTPUT);
+    pinMode(in2, OUTPUT);
+    pinMode(in3, OUTPUT);
+    pinMode(in4, OUTPUT);
+    pinMode(enB, OUTPUT);
+    pinMode(enA, OUTPUT);
+ 
+    for (int i = 0; i < 10; i++) {
+      accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+      gyro_z += gz;
+    }
+ 
+    gyro_z = gyro_z / 10;
+ 
+}
+ 
+void loop() {
+    current_time = millis();
+    accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+ 
+    gyro_z_rate = (gz - gyro_z) / 131;
+ 
+ 
+   if (mySerial.available() > 0) {  //если пришли данные
+    incomingByte = mySerial.read(); // считываем байт
+    if(incomingByte == 'b') {
+       A = false;
+       B = false;
+       Speed_Lev = 100;
+       Speed_Prav = 100;
+    }
+    if(incomingByte == 'f') {
+       A = true;
+       B = true;
+       Speed_Lev = 100;
+       Speed_Prav = 100;
+ 
+    }
+    if(incomingByte == 'r') {
+       Speed_Lev = 0;
+       Speed_Prav = 70;
+    }
+   if(incomingByte == 'l') 
+    {
+       Speed_Lev = 70;
+       Speed_Prav = 0;
+    }
+    if (incomingByte == 's') {
+      Speed_Lev = 0;
+      Speed_Prav = 0;
+    }
+  }
+ 
+ if(incomingByte != 'l' &&  incomingByte != 'r' && incomingByte != 's'){
+    if (current_time >= interval2 + previous_time2) {
+      previous_time2 = current_time;
+      if (A == B) {
+        if (gyro_z_rate < -5) {
+          Speed_Prav -= 1;
+          Speed_Lev +=1;
+        } else if (gyro_z_rate > 5) {
+          Speed_Lev -= 1;
+          Speed_Prav += 1;
+        }
+      }
+    }
+ }
+ 
+    if (current_time >= interval + previous_time) {
+        previous_time = current_time;
+        float dist_cm = ultrasonic.Ranging(CM); //Нашли расстояние
+ 
+ 
+ 
+ 
+        if ((current_time & 2400) == 0) {
+            Serial.println(gyro_z);
+            Serial.println(gyro_z_rate);
+            Serial.println(Speed_Lev);
+            Serial.println(Speed_Prav);
+            Serial.println(incomingByte);
+        }  
+ 
+ 
+        if ((incomingByte != 'l') && (incomingByte != 'r') && (incomingByte != 's')) {
+          if (dist_cm <= 25) {
+             A=!B;
+          } else {
+              A=B;
+ 
+          }
+        }
+        movement(A,B, Speed_Lev, Speed_Prav);
+ 
+ 
+ 
+    }
+ 
+ 
+}
